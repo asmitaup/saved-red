@@ -135,7 +135,13 @@
   .splash-inner{text-align:center; animation:splash-in .6s ease-out;}
   /* Sits directly on the dark-red --bg (no --paper card underneath),
      so it needs light text, not the usual dark --ink. */
-  .splash-brand{font-size:40px; letter-spacing:-0.01em; color:var(--paper);}
+  /* line-height:1.1, not the inherited body 1.5 (i.e. 60px for this
+     40px font) — the extra ~16px of line-box "slack" below the glyphs
+     was most of what actually read as gap to .splash-sub below, even
+     though the margin between the two boxes was already exactly 8px;
+     tightening the line-height (not the margin) is what closes the
+     PERCEIVED gap. */
+  .splash-brand{font-size:40px; line-height:1.1; letter-spacing:-0.01em; color:var(--paper);}
   .splash-brand span{color:var(--accent);}
   .splash-sub{margin-top:var(--space-8); font-size:var(--text-sm); color:var(--ink-on-dark); letter-spacing:.02em;}
   @keyframes splash-in{
@@ -200,13 +206,18 @@
   #screen-detail .triagetoggle{ color:var(--paper); }
   #screen-detail .triagetoggle.active{ color:var(--ink-on-dark); }
 
-  .breadcrumb-row{display:flex; align-items:flex-start; gap:var(--space-8); margin-bottom:var(--space-12);}
+  /* align-items:center (not the old flex-start) so the chevron centers
+     against the FULL height of .breadcrumb-stack next to it — the
+     small breadcrumb trail line plus the big title below it acting
+     together like a subtitle+title pair, not just against the trail's
+     own top line. */
+  .breadcrumb-row{display:flex; align-items:center; gap:var(--space-8); margin-bottom:var(--space-12);}
   .backbtn{
-    background:none; border:none; padding:2px; margin:1px 0 0 -2px; cursor:pointer;
+    background:none; border:none; padding:2px; margin:0 0 0 -2px; cursor:pointer;
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
     color:var(--accent);
   }
-  .backbtn svg{width:20px; height:20px;}
+  .backbtn svg{width:24px; height:24px;}
   .breadcrumb-stack{min-width:0; flex:1;}
   /* The trail (ancestors only, e.g. "Categories › Travel") — small,
      each segment clickable except none here since the current page is
