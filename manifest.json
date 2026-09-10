@@ -1,0 +1,15 @@
+{
+  "name": "Saved — your Instagram archive",
+  "short_name": "Saved",
+  "description": "Browse, categorize, and triage your exported Instagram saved posts.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F2EA",
+  "theme_color": "#A8543D",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

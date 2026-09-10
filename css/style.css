@@ -1,0 +1,658 @@
+  /* ============================================================
+     Design tokens
+     Single source of truth for color, type, spacing, radius and
+     shadow. Everything below should reference these instead of
+     hardcoding literals — that's what makes this a design system
+     rather than a pile of CSS.
+
+     Spacing/type tokens are named by their pixel value (not an
+     abstract scale index) because they capture the exact rhythm
+     already used across the app — naming them didn't change a
+     single visual value, it just gave the repeated ones a home.
+     One-off literals (icon sizes, layout breakpoints, max-widths)
+     are left as plain numbers below since they're fixed component/
+     layout dimensions, not part of the spacing rhythm.
+     ============================================================ */
+  :root{
+    /* Color — surface. --bg matches the maroon extracted from the
+       folder-card Figma design (#8B1410 — same as the band/text color
+       there) rather than the earlier Diabla-sampled red. --paper stays
+       a light warm cream: a surface color for cards/inputs to sit on. */
+    --bg:      #8B1410;
+    --paper:   #FFF9F6;
+    --overlay: rgba(32,26,23,0.35); /* modal backdrop, derived from --ink */
+
+    /* Color — ink (text & icons) */
+    --ink:         #201A17;
+    --ink-soft:    #6B5F59;
+    --ink-faint:   #A89890;
+    --ink-on-dark: #E8DEDA; /* text sitting on an --ink background */
+
+    /* Color — borders */
+    --line: #EDDAD3;
+
+    /* Color — accent (Diabla coral-red) */
+    --accent:      #E8342E;
+    --accent-soft: #FBDAD6;
+    --accent-ink:  #B8241F;
+
+    /* Color — secondary (dusty rose, the second ambient background blob) */
+    --sage:      #C98A7E;
+    --sage-soft: #F2C4BC;
+    --sage-ink:  #8C4238;
+
+    /* Color — category badges (pale pill on a post's category tag).
+       Hue varies per category (hashed in catStyle(), js/app.js) but
+       saturation/lightness are fixed — exposed here as tokens and
+       read at runtime via getComputedStyle so the JS-generated colors
+       and the CSS system can't drift apart. */
+    --cat-sat:       55%;
+    --cat-bg-light:  93%;
+    --cat-ink-sat:   45%;
+    --cat-ink-light: 28%;
+
+    /* Color — gallery tile backgrounds (--tile-color etc.) come from a
+       fixed named palette instead, set inline per tile — see
+       TILE_PALETTE in js/app.js. */
+
+    /* Typography — Fraunces (serif) for headings/brand, Hanken Grotesk
+       (a free Graphik look-alike) for body text. Both loaded via
+       Google Fonts in index.html. */
+    --font-sans:  'Hanken Grotesk', system-ui, sans-serif;
+    --font-serif: 'Fraunces', serif;
+    --text-2xs:      11px;
+    --text-xs:       12px;
+    --text-xs-plus:  12.5px;
+    --text-sm:       13px;
+    --text-md:       14px;
+    --text-base:     15px;
+    --text-lg:       16px;
+    --text-xl:       22px;
+    --text-2xl:      28px;
+
+    /* Spacing */
+    --space-2:  2px;
+    --space-3:  3px;
+    --space-4:  4px;
+    --space-5:  5px;
+    --space-6:  6px;
+    --space-7:  7px;
+    --space-8:  8px;
+    --space-9:  9px;
+    --space-10: 10px;
+    --space-11: 11px;
+    --space-12: 12px;
+    --space-13: 13px;
+    --space-14: 14px;
+    --space-15: 15px;
+    --space-16: 16px;
+    --space-18: 18px;
+    --space-20: 20px;
+    --space-22: 22px;
+    --space-24: 24px;
+
+    /* Radius */
+    --radius-sm:   8px;
+    --radius-md:   10px;
+    --radius-lg:   14px;
+    --radius-xl:   18px;
+    --radius-pill: 20px;
+
+    /* Elevation */
+    --shadow-sm: 0 1px 2px rgba(43,38,32,0.06);
+    --shadow-up: 0 -2px 8px rgba(43,38,32,0.08); /* bars fixed to the bottom edge */
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-sans);
+    font-size:var(--text-base);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:calc(64px + env(safe-area-inset-bottom)); /* fixed offset, not part of the spacing rhythm */
+  }
+  body.triage-active{padding-bottom:calc(150px + env(safe-area-inset-bottom));} /* room for the fixed triagebar */
+  /* The Instagram embed is a cross-origin iframe — clicks inside it
+     never bubble out to .card's own click handler at all, so most of
+     the card (wherever the preview has loaded) was dead space for
+     selecting. Switch it off while selecting so those clicks fall
+     through to the card underneath instead. */
+  body.triage-active .previewbox{ pointer-events:none; }
+  h1,h2,h3{font-family:var(--font-serif);font-weight:500;margin:0;}
+  a{color:inherit;}
+  button, select, input{font-family:inherit;}
+
+  /* ---------- Splash screen ---------- */
+  .splash{
+    position:fixed; inset:0; z-index:200;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg); cursor:pointer;
+  }
+  .splash[hidden]{display:none;}
+  .splash-inner{text-align:center; animation:splash-in .6s ease-out;}
+  /* Sits directly on the dark-red --bg (no --paper card underneath),
+     so it needs light text, not the usual dark --ink. */
+  .splash-brand{font-size:40px; letter-spacing:-0.01em; color:var(--paper);}
+  .splash-brand span{color:var(--accent);}
+  .splash-sub{margin-top:var(--space-8); font-size:var(--text-sm); color:var(--ink-on-dark); letter-spacing:.02em;}
+  @keyframes splash-in{
+    from{opacity:0; transform:translateY(6px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+
+  .screen[hidden]{display:none;}
+
+  .topbar{
+    position:sticky; top:0; z-index:30;
+    background:#0A0A0A;
+    /* Installed as a PWA, the iOS status bar is set to "black-translucent"
+       (content draws under the notch/clock/battery) — without this, the
+       heading sits behind it and looks cut off. Falls back to the normal
+       16px on browsers/devices without a safe-area inset (i.e. everywhere
+       else), so this is a no-op outside standalone PWA mode. */
+    padding:calc(var(--space-16) + env(safe-area-inset-top)) var(--space-16) var(--space-10);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar-row{display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-8); margin-bottom:var(--space-12);}
+  .brand{
+    font-size:var(--text-xl); letter-spacing:-0.01em;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:none;
+  }
+  .brand span{color:var(--accent);}
+  .topbar-meta{display:flex; flex-direction:column; align-items:flex-end; gap:2px;}
+  /* --ink-faint was tuned for the original light --bg and is too
+     light to read on .topbar-glass now that it's a translucent wash
+     over a dark-red page — --ink-soft everywhere here instead. */
+  .stat{font-size:var(--text-xs); color:var(--ink-soft); text-align:right;}
+  .stat b{color:var(--ink-soft); font-weight:600;}
+  /* Nudges you to re-export/re-import periodically — see
+     tools/import_saved_posts.py, which stamps this on every run. */
+  .syncstat{font-size:var(--text-2xs); color:var(--ink-soft); text-align:right;}
+
+  /* The gallery screen's own header — shorter than the subgallery/detail
+     ones (which need room for a back button, search, etc.), so it's
+     scoped to #screen-gallery rather than changing .topbar generally.
+     content-box so the 48px is the visible bar itself; the iOS notch/
+     status-bar clearance is added on top via padding, not eaten from it. */
+  #screen-gallery .topbar{
+    box-sizing:content-box; height:48px;
+    padding:env(safe-area-inset-top) var(--space-16) 0;
+    display:flex; align-items:center;
+  }
+  #screen-gallery .topbar-row{ width:100%; margin-bottom:0; }
+
+  /* The detail screen's plain .topbar is black (see .topbar above) —
+     its own text needs to be light. The nested search box and
+     view-switch pills keep their dark text as-is; they have their own
+     light --paper fill underneath, unaffected by the topbar's own
+     background. */
+  #screen-detail .topbar .backbtn,
+  #screen-detail .breadcrumb,
+  #screen-detail .detail-heading h2,
+  #screen-detail .detail-count,
+  #screen-detail .autotoggle{
+    color:var(--ink-on-dark);
+  }
+  #screen-detail .breadcrumb .crumb{ color:var(--accent); }
+  #screen-detail .triagetoggle{ color:var(--paper); }
+  #screen-detail .triagetoggle.active{ color:var(--ink-on-dark); }
+
+  .breadcrumb-row{display:flex; align-items:flex-start; gap:var(--space-8); margin-bottom:var(--space-12);}
+  .backbtn{
+    background:none; border:none; padding:2px; margin:1px 0 0 -2px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    color:var(--accent);
+  }
+  .backbtn svg{width:20px; height:20px;}
+  .breadcrumb-stack{min-width:0; flex:1;}
+  /* The trail (ancestors only, e.g. "Categories › Travel") — small,
+     each segment clickable except none here since the current page is
+     the big heading below instead of the trail's own last crumb. */
+  .breadcrumb{
+    display:flex; align-items:center; flex-wrap:wrap; gap:3px;
+    font-size:var(--text-xs); margin-bottom:2px; min-height:16px;
+  }
+  .breadcrumb .crumb{
+    background:none; border:none; padding:0; font:inherit; cursor:pointer;
+    color:var(--accent-ink);
+  }
+  .breadcrumb .crumb:hover{ text-decoration:underline; }
+  .breadcrumb .crumb-sep{ width:11px; height:11px; opacity:.5; flex-shrink:0; }
+  .detail-heading{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-8);}
+  .detail-heading h2{font-size:var(--text-xl); letter-spacing:-0.01em;}
+  .breadcrumb-stack > h2{font-size:var(--text-xl); letter-spacing:-0.01em;}
+  .detail-count{font-size:var(--text-xs); color:var(--ink-faint); white-space:nowrap;}
+
+  .viewswitch{display:flex; gap:var(--space-6); margin-bottom:var(--space-12);}
+  .viewbtn{
+    flex:1; padding:var(--space-7) 0; border-radius:var(--radius-pill); border:1px solid var(--line);
+    background:var(--paper); color:var(--ink-soft);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .viewbtn svg{width:17px; height:17px;}
+  .viewbtn.active{background:var(--ink); border-color:var(--ink); color:var(--paper);}
+
+  .searchwrap{position:relative; margin-bottom:var(--space-12);}
+  .searchwrap svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; stroke:var(--ink-faint);}
+  input[type="search"]{
+    width:100%; padding:var(--space-10) var(--space-12) var(--space-10) 34px;
+    border:1px solid var(--line); border-radius:var(--radius-md);
+    background:var(--paper); color:var(--ink); font-size:var(--text-md);
+    outline:none;
+  }
+  input[type="search"]:focus{border-color:var(--accent);}
+
+  .topbar-tools{
+    display:flex; align-items:center; justify-content:space-between; gap:var(--space-8);
+    margin-top:var(--space-10);
+  }
+  .autotoggle{
+    display:flex; align-items:center; gap:var(--space-6); font-size:var(--text-xs); color:var(--ink-faint);
+    user-select:none;
+  }
+  .autotoggle input{width:14px; height:14px;}
+  .triagetoggle{
+    background:none; border:none; padding:0; cursor:pointer;
+    font-size:var(--text-xs); color:var(--accent-ink); font-weight:500; white-space:nowrap;
+  }
+  .triagetoggle.active{color:var(--ink-soft);}
+
+  /* ---------- Category gallery (landing page) ---------- */
+  /* Soft blurred color behind the glass topbar/tiles — glassmorphism needs
+     something with depth to show through the translucency, a flat backdrop
+     just reads as plain grey. Fixed behind the scrolling grid. */
+  #screen-gallery{position:relative;}
+  /* Used to hold two blurred color blobs for an ambient-glow effect —
+     removed so the page reads as a genuinely flat, solid --bg instead
+     of a soft gradient. Left as a plain (now empty) layer rather than
+     removing the div/markup, in case a flat accent wash is wanted here later. */
+  .gallery-bg{
+    position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
+  }
+
+  /* Black header (gallery + subgallery). Was a light glass wash before,
+     so every child that had its own explicit dark color needs an
+     override here — .brand and the subgallery h2 have no color of
+     their own and just inherit the .topbar-glass{color} below. */
+  .topbar-glass{
+    position:sticky; z-index:30;
+    background:rgba(0,0,0,0.88);
+    backdrop-filter:blur(20px) saturate(160%);
+    -webkit-backdrop-filter:blur(20px) saturate(160%);
+    border-bottom:1px solid rgba(255,255,255,0.1);
+    box-shadow:0 4px 24px rgba(0,0,0,0.3);
+    color:var(--ink-on-dark);
+  }
+  .topbar-glass .stat, .topbar-glass .stat b, .topbar-glass .syncstat{ color:var(--ink-on-dark); }
+  .topbar-glass .backbtn{ color:var(--accent); }
+
+  .catgrid{
+    position:relative; z-index:1;
+    padding:var(--space-16); margin:0 auto; max-width:1400px;
+    display:grid; gap:var(--space-16);
+    /* Fluid 2 columns, uncapped, for anything up to 664px (see the
+       breakpoint below) — tiles stretch to fill exactly whatever
+       width is available, so the edges land on exactly 16px no
+       matter how wide the phone is. .cattile has NO max-width of its
+       own below this breakpoint (see .cattile) specifically to avoid
+       a real bug this app shipped with: capping the tile at 200px
+       while the track itself (an uncapped `1fr`) grew past 200px on
+       a wider phone. Once a tile has a definite width (100%, then
+       clamped by max-width) it's no longer eligible for stretch
+       alignment, so it sat stuck to the START of its own oversized
+       track — leaving 30–100px of dead space against the right edge
+       of every card, compounding with the real gap/padding to make
+       the right side dramatically wider than the left (confirmed at
+       a 516px viewport: 16px left edge, 50px right). Tying the cap to
+       the same breakpoint that switches to the fixed-column grid
+       below means a track can never be wider than a tile while this
+       fluid rule is active — there's nothing to grow past. */
+    grid-template-columns:repeat(2, 1fr);
+  }
+  @media (min-width:664px){
+    .catgrid{
+      /* 200px is a cap here, not a forced size — auto-fill just packs
+         as many full 200px tiles per row as fit. */
+      grid-template-columns:repeat(auto-fill, 200px);
+      /* Leftover space in a row (once column count is fixed) pools on
+         one side by default — center it instead so it splits evenly. */
+      justify-content:center;
+    }
+  }
+
+  /* Plain flat bar for "All posts" — it's the everything-escape-hatch, not
+     a category, so it deliberately doesn't look like one: no folder
+     shape, just a 40px row. #F29D9A at 20% opacity, genuinely
+     translucent (unlike the earlier maroon tint, this is a different
+     hue from --bg, so it blends into a real visible color instead of
+     disappearing into an identical background). */
+  .allbar{
+    grid-column:1 / -1; height:40px; border-radius:var(--radius-md);
+    background:rgba(242,157,154,.2); border:1px solid rgba(252,217,216,.1);
+    display:flex; align-items:center; gap:var(--space-10);
+    padding:0 var(--space-14); cursor:pointer; color:var(--ink-on-dark);
+  }
+  .allbar .cattile-icon{color:var(--ink-on-dark);}
+  .allbar .cattile-label{font-size:var(--text-md);}
+  .allbar .cattile-count{margin-left:auto; color:var(--ink-on-dark); opacity:.85;}
+
+  /* Sub-category list (subgallery screen, category branch only — the
+     vault's subgallery still uses the card grid below, since those are
+     separate locked categories rather than children of one folder).
+     Root row (the category itself, flush left) then each sub-category
+     indented under a hooked "into" arrow — an indented list rather than
+     a card grid. */
+  .catgrid.sublist{
+    display:flex; flex-direction:column; gap:0;
+    padding:0; margin:0 auto; max-width:640px;
+  }
+  .sublist-row{
+    position:relative;
+    display:flex; align-items:center; gap:var(--space-10);
+    padding:var(--space-12) var(--space-16);
+    cursor:pointer;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .sublist-row:last-child{ border-bottom:none; }
+  .sublist-row--sub{ padding-left:52px; }
+  .sublist-arrow{
+    position:absolute; left:20px; top:50%; transform:translateY(-50%);
+    width:16px; height:16px; color:var(--ink-on-dark); opacity:.55; flex-shrink:0;
+  }
+  /* Folder icon + label, 4px apart, as one horizontal unit. */
+  .sublist-iconlabel{
+    display:flex; align-items:center; gap:4px; min-width:0; flex:1;
+  }
+  .sublist-icon{ width:34px; flex-shrink:0; aspect-ratio:199.667 / 181.943; }
+  .sublist-icon .folder-svg{
+    width:100%; height:100%; display:block;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.18));
+  }
+  .sublist-label{
+    font-size:var(--text-md); font-weight:500; color:var(--ink-on-dark);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .sublist-count{
+    font-size:var(--text-sm); color:var(--ink-on-dark); opacity:.7;
+    margin-left:auto; flex-shrink:0; padding-left:var(--space-10);
+  }
+  .sublist-chevron{ width:16px; height:16px; color:var(--ink-on-dark); opacity:.55; flex-shrink:0; }
+
+  /* Folder-shaped category tile — three real Figma layers in one SVG
+     (folderSvg() in js/app.js, node 24:197): the fused tab+body outline,
+     the maroon band showing through the opening, and the front panel —
+     see the comment above folderSvg() for the exact structure and why
+     there's no visible seam. Label/count/icon sit directly on the panel,
+     no separate floating card.
+       .folder-svg  — the three-layer folder silhouette
+       .folder-body — layout-only wrapper for icon/label/count; no
+                      background/border/shadow of its own
+     --tile-grad-start/--tile-grad-end/--tile-band-color/--tile-ink
+     differ per category, set inline — see js/app.js. */
+  .cattile{
+    position:relative; width:100%; aspect-ratio:1; cursor:pointer;
+    color:var(--tile-ink, #8B1410);
+  }
+  /* The 200px cap only applies once .catgrid switches to its fixed
+     auto-fill grid at the same breakpoint (see .catgrid) — below that,
+     .cattile is meant to fill its fluid track exactly, uncapped. */
+  @media (min-width:664px){
+    .cattile{ max-width:200px; }
+  }
+  .cattile .folder-svg{
+    position:absolute; inset:0; width:100%; height:100%; display:block;
+    filter:drop-shadow(0 3px 6px rgba(0,0,0,.18));
+  }
+  .cattile .folder-body{
+    /* Outer box sits right at the front panel's own edges (Figma:
+       panel starts ~32% down, ~1% in from each side) — the actual
+       visual inset for the icon comes from the uniform padding below,
+       so its top-gap and left-gap from the panel are identical by
+       construction, not two independently-guessed percentages. */
+    position:absolute; top:32%; left:1%; right:1%; bottom:2%;
+    padding:var(--space-14);
+    overflow:hidden;
+    display:flex; flex-direction:column; justify-content:space-between; align-items:flex-start;
+    text-align:left;
+  }
+
+  .cattile-icon-chip{
+    display:inline-flex; padding:6px; border-radius:9px;
+    background:rgba(0,0,0,.1);
+  }
+  .cattile-icon{width:20px; height:20px; opacity:.95; position:relative; z-index:1;}
+  .cattile-icon svg{width:100%; height:100%;}
+  .cattile-bottom{position:relative; z-index:1; display:flex; flex-direction:column; gap:2px; margin-top:auto;}
+
+  /* Tapping a tile: the front panel (.folder-front, see folderSvg()
+     in js/app.js) is hinged at its own bottom edge, revealing two
+     tucked .folder-paper rects (tinted maroon, not literal white
+     paper) sliding up from behind it. Two earlier attempts at this:
+     (1) split the front into two copies that skewed apart into a flat
+     "V" (closer to the stylized Dribbble reference this was modeled
+     on) — skewX+scaleY has no real hinge to it, so it read as the
+     flap vertically squashing down rather than a cover opening; (2) a
+     true 3D lift (perspective()+rotateX() around the bottom edge) —
+     which is the physically-correct fix for that, but this SVG is
+     stretched non-uniformly to fill a square tile from its own
+     non-square viewBox (preserveAspectRatio="none"), and a real 3D
+     rotation inside that already-skewed coordinate space rendered as
+     a lopsided trapezoid, not a clean tip-back. So this is 2D again,
+     but unlike attempt (1): scaleY shrink is paired with an upward
+     translateY large enough that the WHOLE flap (both its hinge edge
+     and its far edge) visibly rises as it shrinks, instead of just the
+     far edge drooping down toward a fixed hinge — reading as "picked
+     up and folded back" rather than "collapsing in place". The tile
+     itself still lifts and scales up — see animateTileOpenThenNavigate()
+     in js/app.js, which delays the actual screen change to match this
+     animation's duration. The category icon has no role in the
+     "opening" motion, so it fades out early (see folder-icon-fade) —
+     an instant cut (no transition at all) was tried first, but it made
+     the flap's own motion read as if it were snapping specifically to
+     hide the icon, rather than an icon fading out on its own; a smooth
+     fade over the animation's first stretch avoids that. */
+  @keyframes folder-icon-fade{
+    0%{ opacity:1; }
+    45%{ opacity:0; }
+    100%{ opacity:0; }
+  }
+  .cattile.opening .cattile-icon-chip{
+    animation:folder-icon-fade .38s ease-out forwards;
+  }
+  @keyframes folder-open-tile{
+    0%{ transform:translateY(0) scale(1); opacity:1; }
+    70%{ transform:translateY(-6px) scale(1.05); opacity:1; }
+    100%{ transform:translateY(-3px) scale(1.08); opacity:0; }
+  }
+  @keyframes folder-flap-open{
+    0%{ transform:translateY(0) scaleY(1); }
+    100%{ transform:translateY(-42px) scaleY(.58); opacity:.88; }
+  }
+  @keyframes folder-paper-peek{
+    0%{ transform:translateY(0); opacity:0; }
+    30%{ opacity:1; }
+    100%{ transform:translateY(-42px); opacity:1; }
+  }
+  /* The flap and papers finish most of their motion early (ease-out)
+     so they're clearly visible for a beat before the tile-level fade
+     (which holds at full opacity until 70%, see folder-open-tile
+     above) takes over — layering the fade on top of a still-mid-lift
+     flap muddied the effect instead of reading as "the folder opened
+     and is now navigating away". */
+  .cattile.opening{
+    animation:folder-open-tile .38s ease-in forwards;
+    z-index:5;
+  }
+  .cattile.opening .folder-front{
+    transform-box:fill-box; transform-origin:50% 100%;
+    animation:folder-flap-open .38s ease-out forwards;
+  }
+  .cattile.opening .folder-paper-1{
+    animation:folder-paper-peek .38s ease-out forwards;
+  }
+  .cattile.opening .folder-paper-2{
+    animation:folder-paper-peek .38s ease-out .04s both;
+  }
+
+  /* Reorder mode (gallery screen only) */
+  .cattile.reorderable{cursor:grab; touch-action:none;}
+  .cattile.dragging{opacity:.25;}
+  .cattile-ghost{
+    position:fixed; top:0; left:0; z-index:1000; pointer-events:none;
+    transform-origin:center; box-shadow:0 20px 40px rgba(43,38,32,.35);
+    border-radius:var(--radius-lg); opacity:.96;
+  }
+  @keyframes cattile-jiggle{
+    0%, 100%{transform:rotate(-0.7deg);}
+    50%{transform:rotate(0.7deg);}
+  }
+  .cattile.reorderable:not(.dragging){animation:cattile-jiggle .26s ease-in-out infinite;}
+  /* A pill, not plain text — per the Figma spec: rgba(0,0,0,.05) chip,
+     full-pill radius, Inter/Hanken Semibold 12px. This is a real
+     typographic change from the previous large serif label. */
+  .cattile-label{
+    display:inline-block; font-family:var(--font-sans); font-weight:600; font-size:12px; line-height:1.3;
+    background:rgba(0,0,0,.05); border-radius:100px; padding:2px 8px;
+  }
+  .cattile-count{font-family:var(--font-sans); font-weight:300; font-size:10px; opacity:.9; white-space:nowrap;}
+
+  /* ---------- Post feed (detail screen) ---------- */
+  .feed{
+    padding:var(--space-14) var(--space-16) 0; margin:0 auto; max-width:1400px;
+    display:grid; grid-template-columns:1fr; gap:var(--space-12);
+  }
+  @media (min-width:560px){ .feed{ grid-template-columns:repeat(2, 1fr); } }
+  @media (min-width:900px){ .feed{ grid-template-columns:repeat(3, 1fr); } }
+  @media (min-width:1300px){ .feed{ grid-template-columns:repeat(4, 1fr); } }
+
+  /* Explicit density overrides for the view switcher. Each mode forces its
+     own column count outright — none of them fall back to the plain .feed
+     rule above, which only grows past 1 column above 560px. Without this,
+     "Grid" looked identical to "List" on any phone-width screen. Higher
+     specificity than the responsive rules above wins at every breakpoint. */
+  .feed.cols-1{ grid-template-columns:1fr; }
+  .feed.cols-2{ grid-template-columns:repeat(2, 1fr); }
+  .feed.cols-grid{ grid-template-columns:repeat(3, 1fr); gap:var(--space-8); }
+  @media (min-width:900px){ .feed.cols-grid{ grid-template-columns:repeat(4, 1fr); } }
+  @media (min-width:1300px){ .feed.cols-grid{ grid-template-columns:repeat(5, 1fr); } }
+  /* Tighter card padding in the denser views — more of the small card is media, less border. */
+  .feed.cols-2 .card, .feed.cols-grid .card{ padding:var(--space-8); }
+
+  .empty{
+    text-align:center; padding:60px 20px; color:var(--ink-faint);
+  }
+  .card{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-lg);
+    padding:var(--space-14) var(--space-15); box-shadow:var(--shadow-sm); display:flex; flex-direction:column;
+    position:relative; aspect-ratio:1; min-width:0; /* min-width:0 prevents a loaded embed's intrinsic width from forcing uneven grid columns */
+  }
+  .card.selectable{cursor:pointer;}
+  .card.selected{border-color:var(--accent); background:var(--accent-soft);}
+  .card-select{
+    position:absolute; top:var(--space-10); left:var(--space-10); z-index:2;
+    width:18px; height:18px; accent-color:var(--accent); cursor:pointer;
+  }
+  .card.selectable .card-bottom{padding-left:26px;} /* room for the checkbox overlay */
+  .caption{font-size:var(--text-md); color:var(--ink); white-space:pre-line; margin-bottom:var(--space-10);}
+  .card-bottom{
+    display:flex; align-items:center; justify-content:space-between; gap:var(--space-8);
+    flex-wrap:nowrap; flex-shrink:0;
+  }
+  .catpill{
+    font-size:var(--text-xs); line-height:1; padding:var(--space-3) var(--space-10); border-radius:var(--radius-sm); border:1px solid transparent;
+    cursor:pointer; font-weight:500; white-space:nowrap; flex-shrink:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .collchips{display:flex; gap:var(--space-4); flex-wrap:nowrap; overflow:hidden;}
+  .collchip{font-size:var(--text-2xs); line-height:1; color:var(--ink-faint); border:1px solid var(--line); padding:var(--space-3) var(--space-7); border-radius:var(--radius-sm); white-space:nowrap; flex-shrink:0;}
+  .openlink{color:var(--accent-ink); display:inline-flex; align-items:center; text-decoration:none; flex-shrink:0;}
+  .openlink svg{width:17px; height:17px;}
+  .previewbox{
+    margin-top:var(--space-10); border-radius:var(--radius-md);
+    position:relative; width:100%; flex:1; min-height:0; background:var(--paper);
+    display:flex; align-items:center; justify-content:center;
+  }
+  /* Only clipped once the embed has actually loaded and been measured (see
+     fitEmbedToSquare in app.js). Clipping from the start — before
+     Instagram's resize logic has run — stops it from ever resizing past
+     its placeholder height; it seems to use a visibility/intersection
+     check that a small overflow:hidden ancestor defeats. The card itself
+     (not this frame) is the square — this just fills whatever space is
+     left in it below the category/actions row. */
+  .previewbox.fitted{overflow:hidden;}
+  .previewstatus{font-size:var(--text-xs-plus); color:var(--ink-faint); padding:var(--space-10); text-align:center; border:1px dashed var(--line); border-radius:var(--radius-md);}
+  /* The embed iframe itself — positioned and scaled directly via JS
+     (fitEmbedToSquare in app.js) to crop out Instagram's header/footer
+     chrome and fill the card's frame with just the media. */
+  .embed-frame{border:none; display:block;}
+  .previewbox.fitted .embed-frame{position:absolute; top:0; left:0; transform-origin:top left;}
+
+  .catrow{display:flex; align-items:center; gap:var(--space-6); flex-wrap:nowrap; overflow:hidden; min-width:0; flex:1;}
+
+  .loadmore{
+    display:block; margin:var(--space-8) auto 24px; padding:var(--space-10) 22px; border-radius:var(--radius-pill);
+    border:1px solid var(--line); background:var(--paper); color:var(--ink-soft); font-size:var(--text-sm);
+  }
+
+  .sheet-backdrop{
+    position:fixed; inset:0; background:var(--overlay); z-index:100;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .sheet-backdrop.open{display:flex;}
+  .sheet{
+    background:var(--paper); width:100%; max-width:640px; border-radius:var(--radius-xl) var(--radius-xl) 0 0;
+    padding:var(--space-18) var(--space-18) calc(26px + env(safe-area-inset-bottom)); max-height:70vh; overflow-y:auto;
+  }
+  .sheet h3{font-size:var(--text-lg); margin-bottom:var(--space-12);}
+  .sheet-opt{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:var(--space-11) var(--space-4); border-bottom:1px solid var(--line); font-size:var(--text-md); cursor:pointer;
+  }
+  .sheet-opt:last-child{border-bottom:none;}
+  .sheet-opt .n{color:var(--ink-faint); font-size:var(--text-xs);}
+  .sheet-new{display:flex; gap:var(--space-8); margin-top:var(--space-12);}
+  .sheet-new input{flex:1; padding:var(--space-9) var(--space-10); border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--paper);}
+  .sheet-new button{padding:var(--space-9) var(--space-14); border-radius:var(--radius-sm); border:none; background:var(--ink); color:var(--paper); font-size:var(--text-sm); font-weight:500;}
+  .sheet-close{display:block; width:100%; text-align:center; padding:var(--space-10); margin-top:var(--space-10); color:var(--ink-faint); font-size:var(--text-sm); background:none; border:none;}
+
+  .vault-note{font-size:var(--text-xs-plus); color:var(--ink-faint); margin:calc(-1 * var(--space-8)) 0 var(--space-12);}
+  .vault-input{
+    width:100%; padding:var(--space-10) var(--space-12); border:1px solid var(--line); border-radius:var(--radius-md);
+    background:var(--paper); color:var(--ink); font-size:var(--text-md); margin-top:var(--space-10); outline:none;
+  }
+  .vault-input:focus{border-color:var(--accent);}
+  .vault-error{font-size:var(--text-xs-plus); color:var(--accent-ink); margin:var(--space-8) 0 0;}
+  .vault-submit{
+    display:block; width:100%; margin-top:var(--space-14); padding:var(--space-12);
+    border-radius:var(--radius-md); border:none; background:var(--ink); color:var(--paper);
+    font-size:var(--text-md); font-weight:600; cursor:pointer;
+  }
+  .vault-forgot{
+    display:block; width:100%; text-align:center; margin-top:var(--space-12);
+    background:none; border:none; padding:0; color:var(--accent-ink); font-size:var(--text-xs-plus); cursor:pointer;
+  }
+  .vault-forgot[hidden]{display:none;}
+
+  .triagebar{
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
+    background:var(--paper); border-top:1px solid var(--line); box-shadow:var(--shadow-up);
+    padding:var(--space-10) var(--space-16) calc(var(--space-10) + env(safe-area-inset-bottom));
+  }
+  .triagebar-row{
+    display:flex; align-items:center; justify-content:space-between; gap:var(--space-8);
+    margin-bottom:var(--space-8); font-size:var(--text-xs-plus);
+  }
+  .triagebar-count{font-weight:600; color:var(--ink);}
+  .triagebar-linkgroup{display:flex; gap:var(--space-12);}
+  .triagebar-link{
+    background:none; border:none; padding:0; cursor:pointer;
+    color:var(--accent-ink); font-weight:500; font-size:var(--text-xs-plus); white-space:nowrap;
+  }
+  .triagebar-move{
+    display:block; width:100%; padding:var(--space-12); border-radius:var(--radius-md); border:none;
+    background:var(--ink); color:var(--paper); font-size:var(--text-md); font-weight:600; cursor:pointer;
+  }
+  .triagebar-move:disabled{opacity:.4; cursor:default;}

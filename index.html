@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Saved — your Instagram archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Fraunces for headings/brand; Hanken Grotesk for body — a free,
+     properly-hinted Graphik look-alike (similar geometric-grotesque
+     proportions), since Graphik itself is a commercial typeface not
+     installed on this Mac and not something to source a copy of. -->
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- ?v= is a cache-buster — bumped every time style.css/app.js change,
+     so a phone (especially the installed PWA) can't keep serving a
+     stale copy from before the latest edit. -->
+<link rel="stylesheet" href="css/style.css?v=35" />
+
+<!-- PWA: lets you "Add to Home Screen" on your phone for an app-like icon
+     that opens full-screen, no browser address bar. -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#A8543D" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Saved" />
+</head>
+<body>
+
+<div id="screen-splash" class="splash">
+  <div class="splash-inner">
+    <h1 class="splash-brand">Saved<span>.</span></h1>
+    <div class="splash-sub">your Instagram archive</div>
+  </div>
+</div>
+
+<div id="screen-gallery" class="screen" hidden>
+  <div class="gallery-bg" aria-hidden="true"></div>
+  <div class="topbar topbar-glass">
+    <div class="topbar-row">
+      <h1 class="brand" id="brandTrigger">Saved<span>.</span></h1>
+      <div class="topbar-meta">
+        <div class="stat"><b id="stat-total">0</b> posts · <b id="stat-cats">0</b> categories</div>
+        <div class="syncstat" id="syncStat"></div>
+      </div>
+    </div>
+  </div>
+  <div class="catgrid" id="catgrid"></div>
+</div>
+
+<div id="screen-subgallery" class="screen" hidden>
+  <div class="gallery-bg" aria-hidden="true"></div>
+  <div class="topbar topbar-glass">
+    <div class="breadcrumb-row">
+      <button type="button" class="backbtn" id="backFromSubgallery" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="breadcrumb-stack">
+        <nav class="breadcrumb" id="subgalleryBreadcrumb" aria-label="Breadcrumb"></nav>
+        <h2 id="subgalleryTitle">Category</h2>
+      </div>
+    </div>
+  </div>
+  <div class="catgrid" id="subgrid"></div>
+</div>
+
+<div id="screen-detail" class="screen" hidden>
+  <div class="topbar">
+    <div class="breadcrumb-row">
+      <button type="button" class="backbtn" id="backToGallery" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="breadcrumb-stack">
+        <nav class="breadcrumb" id="detailBreadcrumb" aria-label="Breadcrumb"></nav>
+        <div class="detail-heading">
+          <h2 id="detailTitle">Category</h2>
+          <span class="detail-count" id="detailCount"></span>
+        </div>
+      </div>
+    </div>
+    <div class="viewswitch" id="viewSwitch">
+      <button type="button" class="viewbtn active" data-cols="list" aria-label="List view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+      </button>
+      <button type="button" class="viewbtn" data-cols="two" aria-label="Two column view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
+      </button>
+      <button type="button" class="viewbtn" data-cols="grid" aria-label="Grid view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/></svg>
+      </button>
+    </div>
+    <div class="searchwrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="search" placeholder="Search captions, tags, accounts…" />
+    </div>
+    <div class="topbar-tools">
+      <label class="autotoggle">
+        <input type="checkbox" id="autoPreviewToggle" checked />
+        Auto-load previews while scrolling
+      </label>
+      <button type="button" class="triagetoggle" id="triageToggle">Select multiple</button>
+    </div>
+  </div>
+
+  <div class="feed cols-1" id="feed"></div>
+  <button class="loadmore" id="loadmore" style="display:none;">Show more</button>
+</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop">
+  <div class="sheet">
+    <h3 id="sheetTitle">Move to category</h3>
+    <div id="sheetOptions"></div>
+    <div class="sheet-new">
+      <input type="text" id="newCatInput" placeholder="New category name" />
+      <button id="newCatBtn">Add</button>
+    </div>
+    <button class="sheet-close" id="sheetClose">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="vaultBackdrop">
+  <div class="sheet">
+    <h3 id="vaultTitle">Enter password</h3>
+    <p class="vault-note" id="vaultNote" hidden></p>
+    <input type="password" id="vaultPassword" class="vault-input" placeholder="Password" autocomplete="off" />
+    <input type="password" id="vaultPasswordConfirm" class="vault-input" placeholder="Confirm password" style="display:none;" autocomplete="off" />
+    <p class="vault-error" id="vaultError" hidden></p>
+    <button type="button" class="vault-submit" id="vaultSubmit">Unlock</button>
+    <button type="button" class="vault-forgot" id="vaultForgot" hidden>Forgot password?</button>
+    <button type="button" class="sheet-close" id="vaultCancel">Cancel</button>
+  </div>
+</div>
+
+<div class="triagebar" id="triagebar" hidden>
+  <div class="triagebar-row">
+    <span class="triagebar-count" id="triageCount">0 selected</span>
+    <div class="triagebar-linkgroup">
+      <button type="button" class="triagebar-link" id="selectAllBtn">Select all</button>
+      <button type="button" class="triagebar-link" id="clearSelBtn">Clear</button>
+    </div>
+  </div>
+  <button type="button" class="triagebar-move" id="bulkMoveBtn" disabled>Move to category</button>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/sync-meta.js"></script>
+<script src="js/app.js?v=32"></script>
+</body>
+</html>
