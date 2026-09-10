@@ -606,16 +606,52 @@
     background:var(--paper); width:100%; max-width:640px; border-radius:var(--radius-xl) var(--radius-xl) 0 0;
     padding:var(--space-18) var(--space-18) calc(26px + env(safe-area-inset-bottom)); max-height:70vh; overflow-y:auto;
   }
-  .sheet h3{font-size:var(--text-lg); margin-bottom:var(--space-12);}
+  /* Move sheet: a category's own drill-in arrow (.sheet-opt-drill)
+     opens a second "screen" in the same sheet listing just that
+     category's subcategories (.sheet-back returns to the category
+     list) — see renderSheetOptions()/openCatSheet() in js/app.js. */
+  .sheet-header{display:flex; align-items:center; gap:var(--space-8); margin-bottom:var(--space-12);}
+  .sheet-back{
+    background:none; border:none; padding:2px; margin:0 0 0 -2px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--accent);
+  }
+  /* The class rule's display:flex otherwise wins over the browser's own
+     default [hidden]{display:none} — same specificity, and author CSS
+     always outranks the UA stylesheet — so toggling the `hidden`
+     attribute alone (see renderSheetOptions() in js/app.js) silently did
+     nothing until this was added explicitly. */
+  .sheet-back[hidden]{display:none;}
+  .sheet-back svg{width:20px; height:20px;}
+  .sheet h3{font-size:var(--text-lg); margin:0;}
   .sheet-opt{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:var(--space-11) var(--space-4); border-bottom:1px solid var(--line); font-size:var(--text-md); cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between; gap:var(--space-6);
+    padding:var(--space-4) var(--space-4) var(--space-4) 0; border-bottom:1px solid var(--line); font-size:var(--text-md); cursor:pointer;
   }
   .sheet-opt:last-child{border-bottom:none;}
-  .sheet-opt .n{color:var(--ink-faint); font-size:var(--text-xs);}
+  .sheet-opt .n{color:var(--ink-faint); font-size:var(--text-xs); flex-shrink:0;}
+  /* Categories screen only: the row splits into a clickable label+count
+     (assigns straight to that category, no subcategory — the same
+     single click this whole row used to be) and a separate drill-in
+     arrow into its subcategories. */
+  .sheet-opt-main{
+    flex:1; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:var(--space-8);
+    padding:var(--space-7) 0;
+  }
+  .sheet-opt-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sheet-opt-drill{
+    background:none; border:none; padding:var(--space-7) var(--space-8); margin:0;
+    color:var(--ink-faint); font-size:20px; line-height:1; cursor:pointer; flex-shrink:0;
+  }
+  /* Subcategories screen only: "All <Category>" is the equivalent of
+     the old plain category-only assignment, listed first. */
+  .sheet-opt-allcat{ padding-top:var(--space-11); padding-bottom:var(--space-11); }
+  .sheet-opt-hint{font-size:var(--text-xs); color:var(--ink-faint); font-weight:400;}
   .sheet-new{display:flex; gap:var(--space-8); margin-top:var(--space-12);}
   .sheet-new input{flex:1; padding:var(--space-9) var(--space-10); border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--paper);}
   .sheet-new button{padding:var(--space-9) var(--space-14); border-radius:var(--radius-sm); border:none; background:var(--ink); color:var(--paper); font-size:var(--text-sm); font-weight:500;}
+  /* Same [hidden] fix as .sheet-back above — #sheetNewCat/#sheetNewSubcat
+     are toggled via the `hidden` attribute. */
+  .sheet-new[hidden]{display:none;}
   .sheet-close{display:block; width:100%; text-align:center; padding:var(--space-10); margin-top:var(--space-10); color:var(--ink-faint); font-size:var(--text-sm); background:none; border:none;}
 
   .vault-note{font-size:var(--text-xs-plus); color:var(--ink-faint); margin:calc(-1 * var(--space-8)) 0 var(--space-12);}

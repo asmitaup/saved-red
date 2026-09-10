@@ -14,7 +14,7 @@
 <!-- ?v= is a cache-buster — bumped every time style.css/app.js change,
      so a phone (especially the installed PWA) can't keep serving a
      stale copy from before the latest edit. -->
-<link rel="stylesheet" href="css/style.css?v=35" />
+<link rel="stylesheet" href="css/style.css?v=36" />
 
 <!-- PWA: lets you "Add to Home Screen" on your phone for an app-like icon
      that opens full-screen, no browser address bar. -->
@@ -108,11 +108,20 @@
 
 <div class="sheet-backdrop" id="sheetBackdrop">
   <div class="sheet">
-    <h3 id="sheetTitle">Move to category</h3>
+    <div class="sheet-header">
+      <button type="button" class="sheet-back" id="sheetBackBtn" hidden aria-label="Back to categories">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <h3 id="sheetTitle">Move to category</h3>
+    </div>
     <div id="sheetOptions"></div>
-    <div class="sheet-new">
+    <div class="sheet-new" id="sheetNewCat">
       <input type="text" id="newCatInput" placeholder="New category name" />
       <button id="newCatBtn">Add</button>
+    </div>
+    <div class="sheet-new" id="sheetNewSubcat" hidden>
+      <input type="text" id="newSubcatInput" placeholder="New subcategory name" />
+      <button id="newSubcatBtn">Add</button>
     </div>
     <button class="sheet-close" id="sheetClose">Cancel</button>
   </div>
@@ -144,6 +153,6 @@
 
 <script src="js/data.js"></script>
 <script src="js/sync-meta.js"></script>
-<script src="js/app.js?v=32"></script>
+<script src="js/app.js?v=33"></script>
 </body>
 </html>

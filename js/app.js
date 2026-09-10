@@ -14,10 +14,25 @@ const CATEGORY_ORDER = ["Fashion & Style","Art & Design","Weddings","Love","Trav
 
 let overrides = {};
 let customCategories = [];
+// Which subcategory a post has been manually filed into — separate from
+// `overrides` (main category) and from the post's own raw `collections`
+// array (untouched either way). Keyed by post id; '' explicitly means
+// "no subcategory, sits directly under the category" (distinct from the
+// key being absent entirely, which means "no manual assignment — derive
+// it the old way, from collections/CURATED_SUBCATS as before"). See
+// subcategoriesFor()/matchesSubcat() below, and openCatSheet() for where
+// this gets set from the move sheet's category → subcategory drill-in.
+let subcatOverrides = {};
+// User-created subcategory names, per category — e.g. { "Travel": ["Iceland"] }
+// — so a freshly-created subcategory shows up as a move-sheet destination
+// immediately, before any post has actually been filed into it yet.
+let customSubcats = {};
 let storageReady = false;
 
 const LS_OVERRIDES = 'saved-organizer:category-overrides';
 const LS_CUSTOM_CATS = 'saved-organizer:custom-categories';
+const LS_SUBCAT_OVERRIDES = 'saved-organizer:subcat-overrides';
+const LS_CUSTOM_SUBCATS = 'saved-organizer:custom-subcats';
 
 function loadStorage(){
   try{
@@ -27,6 +42,14 @@ function loadStorage(){
   try{
     const c = localStorage.getItem(LS_CUSTOM_CATS);
     if(c) customCategories = JSON.parse(c);
+  }catch(e){}
+  try{
+    const so = localStorage.getItem(LS_SUBCAT_OVERRIDES);
+    if(so) subcatOverrides = JSON.parse(so);
+  }catch(e){}
+  try{
+    const cs = localStorage.getItem(LS_CUSTOM_SUBCATS);
+    if(cs) customSubcats = JSON.parse(cs);
   }catch(e){}
   storageReady = true;
   applyOverrides();
@@ -38,6 +61,8 @@ function persist(){
   saveTimer = setTimeout(() => {
     try{ localStorage.setItem(LS_OVERRIDES, JSON.stringify(overrides)); }catch(e){}
     try{ localStorage.setItem(LS_CUSTOM_CATS, JSON.stringify(customCategories)); }catch(e){}
+    try{ localStorage.setItem(LS_SUBCAT_OVERRIDES, JSON.stringify(subcatOverrides)); }catch(e){}
+    try{ localStorage.setItem(LS_CUSTOM_SUBCATS, JSON.stringify(customSubcats)); }catch(e){}
   }, 400);
 }
 
@@ -131,34 +156,70 @@ const CURATED_SUBCATS = {
 // be a real "sub-folder").
 const AUTO_SUBCAT_MIN_COUNT = 3;
 
-function subcategoriesFor(cat){
+// A post's subcategory within its own category, before any manual
+// override — curated categories match against CURATED_SUBCATS as
+// before; everything else has no single "natural" label (a post can
+// raw-match several collections at once there, tallied separately
+// below), so this only applies to the curated path.
+function naturalSubcat(p){
+  const curated = CURATED_SUBCATS[p.category];
+  if(!curated) return null;
+  const def = curated.find(d => p.collections.some(c => d.match.includes(c)));
+  return def ? def.label : null;
+}
+
+// includeEmpty:false (default, used for browsing the subgallery) — same
+// behavior as before this app supported moving posts between
+// subcategories: curated labels and auto-derived ones (>=3 raw-collection
+// matches), each only listed once they actually have a post in them.
+// includeEmpty:true (used by the move sheet's subcategory picker) also
+// lists curated defs and user-created custom subcategories (see
+// customSubcats) even with zero posts yet, so they're pickable as a
+// destination right after creating them or before anything's been filed
+// into them.
+function subcategoriesFor(cat, includeEmpty){
   const curated = CURATED_SUBCATS[cat];
-  if(curated){
-    return curated
-      .map(def => ({
-        label: def.label,
-        count: posts.filter(p => p.category === cat && p.collections.some(c => def.match.includes(c))).length,
-      }))
-      .filter(s => s.count > 0);
-  }
-  const tally = {};
+  const custom = customSubcats[cat] || [];
+  const counts = {};
+  const bump = (label) => { counts[label] = (counts[label] || 0) + 1; };
+  const rawTally = {}; // auto-derive path only, subject to AUTO_SUBCAT_MIN_COUNT below
+
   for(const p of posts){
     if(p.category !== cat) continue;
-    for(const c of p.collections) tally[c] = (tally[c] || 0) + 1;
+    const ov = subcatOverrides[p.id];
+    if(ov !== undefined){
+      if(ov) bump(ov); // manually filed here — counts regardless of any threshold
+      continue;
+    }
+    if(curated){
+      const nat = naturalSubcat(p);
+      if(nat) bump(nat);
+    } else {
+      for(const c of p.collections) rawTally[c] = (rawTally[c] || 0) + 1;
+    }
   }
-  return Object.entries(tally)
-    .filter(([, n]) => n >= AUTO_SUBCAT_MIN_COUNT)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => ({ label, count }));
+  if(!curated){
+    for(const [label, n] of Object.entries(rawTally)){
+      if(n >= AUTO_SUBCAT_MIN_COUNT) counts[label] = (counts[label] || 0) + n;
+    }
+  }
+  if(includeEmpty){
+    for(const label of custom){ if(!(label in counts)) counts[label] = 0; }
+    if(curated){ for(const def of curated){ if(!(def.label in counts)) counts[def.label] = 0; } }
+  }
+
+  return Object.entries(counts)
+    .map(([label, count]) => ({ label, count }))
+    .filter(s => includeEmpty || s.count > 0)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 function matchesSubcat(p){
   if(!activeSubcat) return true;
+  const ov = subcatOverrides[p.id];
+  if(ov !== undefined) return ov === activeSubcat;
   const curated = CURATED_SUBCATS[activeCat];
-  if(curated){
-    const def = curated.find(d => d.label === activeSubcat);
-    return def ? p.collections.some(c => def.match.includes(c)) : false;
-  }
+  if(curated) return naturalSubcat(p) === activeSubcat;
   return p.collections.includes(activeSubcat);
 }
 
@@ -813,10 +874,18 @@ function renderTriageBar(){
   document.getElementById('bulkMoveBtn').disabled = selectedIds.size === 0;
 }
 
-function bulkAssignCategory(ids, cat){
+// subcat: '' means "no subcategory, sits directly under the category";
+// omit the argument (undefined) to leave whatever subcategory the post(s)
+// already had alone (used when reassigning only the main category isn't
+// meant to touch subcategory — currently unused by the sheet UI below,
+// which always passes one explicitly, but kept as the safe default).
+function bulkAssignCategoryAndSubcat(ids, cat, subcat){
   for(const id of ids){
     const p = postsById.get(id);
-    if(p){ p.category = cat; overrides[id] = cat; }
+    if(!p) continue;
+    p.category = cat;
+    overrides[id] = cat;
+    if(subcat !== undefined) subcatOverrides[id] = subcat;
   }
   persist();
   render();
@@ -838,36 +907,111 @@ document.getElementById('search').addEventListener('input', (e) => {
   }, 200);
 });
 
+// The move sheet is two "screens" sharing one modal: a flat list of main
+// categories (sheetView 'categories'), or — after tapping a category's
+// own drill-in arrow — that category's subcategories (sheetView
+// 'subcats', sheetDrillCat holds which one). Tapping a category's own
+// label (not its arrow) still assigns straight to it with no
+// subcategory, exactly like before this sheet knew about subcategories
+// at all; the arrow is the only new thing on that screen.
 let activePostId = null;
 let bulkAssignActive = false;
+let sheetView = 'categories';
+let sheetDrillCat = null;
+
 function openCatSheet(id, bulk){
   bulkAssignActive = !!bulk;
   activePostId = bulk ? null : id;
-  const cats = allCategories();
-  const cnt = counts();
-  const optsHtml = cats.map(c => `<div class="sheet-opt" data-cat="${escapeHtml(c)}"><span>${escapeHtml(c)}</span><span class="n">${cnt[c]||0}</span></div>`).join('');
-  document.getElementById('sheetOptions').innerHTML = optsHtml;
-  document.getElementById('sheetTitle').textContent = bulkAssignActive
-    ? `Move ${selectedIds.size.toLocaleString()} posts to category`
-    : 'Move to category';
-  document.querySelectorAll('.sheet-opt').forEach(el => {
-    el.addEventListener('click', () => {
-      if(bulkAssignActive){
-        const ids = [...selectedIds];
-        selectedIds.clear();
-        bulkAssignCategory(ids, el.dataset.cat);
-      } else {
-        assignCategory(activePostId, el.dataset.cat);
-      }
-      closeSheet();
-    });
-  });
+  sheetView = 'categories';
+  sheetDrillCat = null;
+  renderSheetOptions();
   document.getElementById('sheetBackdrop').classList.add('open');
 }
+
+function renderSheetOptions(){
+  const backBtn = document.getElementById('sheetBackBtn');
+  const newCatRow = document.getElementById('sheetNewCat');
+  const newSubcatRow = document.getElementById('sheetNewSubcat');
+  const countLabel = bulkAssignActive ? `${selectedIds.size.toLocaleString()} posts` : '1 post';
+
+  if(sheetView === 'categories'){
+    backBtn.hidden = true;
+    newCatRow.hidden = false;
+    newSubcatRow.hidden = true;
+    document.getElementById('sheetTitle').textContent = `Move ${countLabel} to category`;
+
+    const cats = allCategories();
+    const cnt = counts();
+    document.getElementById('sheetOptions').innerHTML = cats.map(c => `
+      <div class="sheet-opt" data-cat="${escapeHtml(c)}">
+        <span class="sheet-opt-main" data-action="assign">
+          <span class="sheet-opt-label">${escapeHtml(c)}</span>
+          <span class="n">${cnt[c]||0}</span>
+        </span>
+        <button type="button" class="sheet-opt-drill" data-action="drill" aria-label="View ${escapeHtml(c)} subcategories">›</button>
+      </div>`).join('');
+    document.querySelectorAll('.sheet-opt').forEach(el => {
+      const cat = el.dataset.cat;
+      el.querySelector('[data-action="assign"]').addEventListener('click', () => {
+        commitMove(cat, '');
+      });
+      el.querySelector('[data-action="drill"]').addEventListener('click', () => {
+        sheetView = 'subcats';
+        sheetDrillCat = cat;
+        renderSheetOptions();
+      });
+    });
+  } else {
+    const cat = sheetDrillCat;
+    backBtn.hidden = false;
+    newCatRow.hidden = true;
+    newSubcatRow.hidden = false;
+    document.getElementById('sheetTitle').textContent = `Move ${countLabel} to a ${escapeHtml(cat)} subcategory`;
+
+    const subs = subcategoriesFor(cat, true);
+    let html = `<div class="sheet-opt sheet-opt-allcat" data-subcat="">
+      <span class="sheet-opt-label">All ${escapeHtml(cat)} <span class="sheet-opt-hint">(no subcategory)</span></span>
+    </div>`;
+    html += subs.map(s => `
+      <div class="sheet-opt" data-subcat="${escapeHtml(s.label)}">
+        <span class="sheet-opt-label">${escapeHtml(s.label)}</span>
+        <span class="n">${s.count.toLocaleString()}</span>
+      </div>`).join('');
+    document.getElementById('sheetOptions').innerHTML = html;
+    document.querySelectorAll('.sheet-opt').forEach(el => {
+      el.addEventListener('click', () => commitMove(cat, el.dataset.subcat));
+    });
+  }
+}
+
+document.getElementById('sheetBackBtn').addEventListener('click', () => {
+  sheetView = 'categories';
+  sheetDrillCat = null;
+  renderSheetOptions();
+});
+
+// The one place that actually performs a move, regardless of whether it
+// came from picking an existing category/subcategory or typing a new
+// one — keeps bulk-vs-single and the sheet-closing/persist steps in
+// exactly one spot instead of repeated at every call site.
+function commitMove(cat, subcat){
+  if(bulkAssignActive){
+    const ids = [...selectedIds];
+    selectedIds.clear();
+    bulkAssignCategoryAndSubcat(ids, cat, subcat);
+  } else {
+    assignCategoryAndSubcat(activePostId, cat, subcat);
+  }
+  closeSheet();
+}
+
 function closeSheet(){
   document.getElementById('sheetBackdrop').classList.remove('open');
   document.getElementById('newCatInput').value = '';
+  document.getElementById('newSubcatInput').value = '';
   bulkAssignActive = false;
+  sheetView = 'categories';
+  sheetDrillCat = null;
 }
 document.getElementById('sheetClose').addEventListener('click', closeSheet);
 document.getElementById('sheetBackdrop').addEventListener('click', (e) => {
@@ -877,22 +1021,25 @@ document.getElementById('newCatBtn').addEventListener('click', () => {
   const v = document.getElementById('newCatInput').value.trim();
   if(!v) return;
   if(!customCategories.includes(v)) customCategories.push(v);
-  if(bulkAssignActive){
-    const ids = [...selectedIds];
-    selectedIds.clear();
-    bulkAssignCategory(ids, v);
-  } else {
-    assignCategory(activePostId, v);
-  }
-  closeSheet();
+  commitMove(v, '');
+  persist();
+});
+document.getElementById('newSubcatBtn').addEventListener('click', () => {
+  const v = document.getElementById('newSubcatInput').value.trim();
+  if(!v || !sheetDrillCat) return;
+  const cat = sheetDrillCat;
+  if(!customSubcats[cat]) customSubcats[cat] = [];
+  if(!customSubcats[cat].includes(v)) customSubcats[cat].push(v);
+  commitMove(cat, v);
   persist();
 });
 
-function assignCategory(id, cat){
+function assignCategoryAndSubcat(id, cat, subcat){
   const p = postsById.get(id);
   if(!p) return;
   p.category = cat;
   overrides[id] = cat;
+  if(subcat !== undefined) subcatOverrides[id] = subcat;
   persist();
   render();
 }
