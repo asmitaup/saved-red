@@ -201,8 +201,13 @@
     display:flex; align-items:center;
   }
   #screen-subgallery .breadcrumb-row{ width:100%; margin-bottom:0; }
-  #screen-subgallery .breadcrumb{ font-size:10px; margin-bottom:1px; min-height:0; }
-  #screen-subgallery .breadcrumb-stack > h2{ font-size:var(--text-lg); letter-spacing:-0.01em; }
+  /* line-height:1.1 on both, not the inherited body 1.5 — that alone
+     was ~13px of invisible slack around the two lines (5px on the
+     breadcrumb's 10px text, 8px on the title's 16px text), on top of
+     the real 4px margin between them; same issue and same fix as the
+     splash screen's title/subtitle gap. */
+  #screen-subgallery .breadcrumb{ font-size:10px; line-height:1.1; margin-bottom:var(--space-4); min-height:0; }
+  #screen-subgallery .breadcrumb-stack > h2{ font-size:var(--text-lg); line-height:1.1; letter-spacing:-0.01em; }
 
   /* The detail screen's plain .topbar is black (see .topbar above) —
      its own text needs to be light. The nested search box and
@@ -236,9 +241,15 @@
   /* The trail (ancestors only, e.g. "Categories › Travel") — small,
      each segment clickable except none here since the current page is
      the big heading below instead of the trail's own last crumb. */
+  /* line-height:1.1, not the inherited body 1.5 — same invisible-slack
+     fix as #screen-subgallery's own breadcrumb/title above and the
+     splash screen's title/subtitle gap: the margin between this and
+     the title below was already the real 4px, but a 1.5 line-height
+     on 12px text added ~6px of its own box padding around the glyphs
+     that read as extra gap. */
   .breadcrumb{
     display:flex; align-items:center; flex-wrap:wrap; gap:3px;
-    font-size:var(--text-xs); margin-bottom:2px; min-height:16px;
+    font-size:var(--text-xs); line-height:1.1; margin-bottom:var(--space-4); min-height:16px;
   }
   .breadcrumb .crumb{
     background:none; border:none; padding:0; font:inherit; cursor:pointer;
@@ -248,7 +259,7 @@
   .breadcrumb .crumb-sep{ width:11px; height:11px; opacity:.5; flex-shrink:0; }
   .detail-heading{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-8);}
   .detail-heading h2{font-size:var(--text-xl); letter-spacing:-0.01em;}
-  .breadcrumb-stack > h2{font-size:var(--text-xl); letter-spacing:-0.01em;}
+  .breadcrumb-stack > h2{font-size:var(--text-xl); line-height:1.1; letter-spacing:-0.01em;}
   .detail-count{font-size:var(--text-xs); color:var(--ink-faint); white-space:nowrap;}
 
   .viewswitch{display:flex; gap:var(--space-6); margin-bottom:var(--space-12);}
