@@ -190,6 +190,20 @@
   }
   #screen-gallery .topbar-row{ width:100%; margin-bottom:0; }
 
+  /* Same compact-header treatment as #screen-gallery above, applied to
+     the subcategory list's header — but this one stacks a breadcrumb
+     trail line above the title (the gallery header is just one line),
+     so fitting both into 48px also means shrinking the title/trail's
+     own font-size and line spacing, not just capping the container. */
+  #screen-subgallery .topbar{
+    box-sizing:content-box; height:48px;
+    padding:env(safe-area-inset-top) var(--space-16) 0;
+    display:flex; align-items:center;
+  }
+  #screen-subgallery .breadcrumb-row{ width:100%; margin-bottom:0; }
+  #screen-subgallery .breadcrumb{ font-size:10px; margin-bottom:1px; min-height:0; }
+  #screen-subgallery .breadcrumb-stack > h2{ font-size:var(--text-lg); letter-spacing:-0.01em; }
+
   /* The detail screen's plain .topbar is black (see .topbar above) —
      its own text needs to be light. The nested search box and
      view-switch pills keep their dark text as-is; they have their own
