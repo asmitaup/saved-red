@@ -14,7 +14,7 @@
 <!-- ?v= is a cache-buster — bumped every time style.css/app.js change,
      so a phone (especially the installed PWA) can't keep serving a
      stale copy from before the latest edit. -->
-<link rel="stylesheet" href="css/style.css?v=40" />
+<link rel="stylesheet" href="css/style.css?v=41" />
 
 <!-- PWA: lets you "Add to Home Screen" on your phone for an app-like icon
      that opens full-screen, no browser address bar. -->
@@ -41,7 +41,7 @@
       <h1 class="brand" id="brandTrigger">Saved<span>.</span></h1>
       <div class="topbar-meta">
         <div class="stat"><b id="stat-total">0</b> posts · <b id="stat-cats">0</b> categories</div>
-        <div class="syncstat" id="syncStat"></div>
+        <button type="button" class="syncstat" id="syncStat" aria-label="Import posts from Instagram"></button>
       </div>
     </div>
   </div>
@@ -140,6 +140,31 @@
   </div>
 </div>
 
+<div class="sheet-backdrop" id="importBackdrop">
+  <div class="sheet">
+    <h3>Import from Instagram</h3>
+    <p class="import-intro">Instagram doesn't let this app sync itself — export your saved posts, then drop the file(s) below to add anything new.</p>
+    <a class="import-openlink" href="https://accountscenter.instagram.com/info_and_permissions/dyi/" target="_blank" rel="noopener">
+      Open Instagram's export page
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+    </a>
+    <ol class="import-steps">
+      <li>Settings → Accounts Center → Your information and permissions → Download your information</li>
+      <li>Select <b>Saved</b> (tick both "Posts" and "Collections"), format <b>HTML</b></li>
+      <li>Instagram emails a download link, usually within minutes to a few hours</li>
+      <li>Unzip it, then drop <code>saved_posts.html</code> below (and <code>saved_collections.html</code>, optional)</li>
+    </ol>
+    <div class="import-drop" id="importDrop">
+      <svg class="import-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 19h14"/></svg>
+      <div class="import-drop-text">Drop files here, or <button type="button" class="import-browse" id="importBrowseBtn">choose files</button></div>
+      <input type="file" id="importFileInput" accept=".html,.htm,.json" multiple hidden />
+    </div>
+    <div class="import-status" id="importStatus" hidden></div>
+    <div class="import-result" id="importResult" hidden></div>
+    <button class="sheet-close" id="importClose">Close</button>
+  </div>
+</div>
+
 <div class="triagebar" id="triagebar" hidden>
   <div class="triagebar-row">
     <span class="triagebar-count" id="triageCount">0 selected</span>
@@ -153,6 +178,6 @@
 
 <script src="js/data.js"></script>
 <script src="js/sync-meta.js"></script>
-<script src="js/app.js?v=33"></script>
+<script src="js/app.js?v=34"></script>
 </body>
 </html>

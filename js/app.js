@@ -1,11 +1,18 @@
 
 const FIELDS = ['id','shortcode','type','caption','owner','date','hashtags','category','collections'];
-let posts = RAW_ROWS.map(r => ({
-  id:r[0], shortcode:r[1], type:r[2], caption:r[3], owner:r[4], date:r[5],
-  hashtags: r[6] ? r[6].split('|') : [],
-  category: r[7],
-  collections: r[8] ? r[8].split('|') : []
-}));
+// Same 9-field row shape as RAW_ROWS (js/data.js) and what
+// tools/import_saved_posts.py writes — shared by the baked-in posts and
+// anything imported later client-side (see "Import from Instagram" below),
+// so both go through one conversion.
+function rowToPost(r){
+  return {
+    id:r[0], shortcode:r[1], type:r[2], caption:r[3], owner:r[4], date:r[5],
+    hashtags: r[6] ? r[6].split('|') : [],
+    category: r[7],
+    collections: r[8] ? r[8].split('|') : []
+  };
+}
+let posts = RAW_ROWS.map(rowToPost);
 // O(1) lookup by id — needed so bulk operations on hundreds/thousands of
 // selected posts don't each do an O(n) scan over the full 26k-post array.
 const postsById = new Map(posts.map(p => [p.id, p]));
@@ -33,6 +40,13 @@ const LS_OVERRIDES = 'saved-organizer:category-overrides';
 const LS_CUSTOM_CATS = 'saved-organizer:custom-categories';
 const LS_SUBCAT_OVERRIDES = 'saved-organizer:subcat-overrides';
 const LS_CUSTOM_SUBCATS = 'saved-organizer:custom-subcats';
+// Posts added via the in-app "Import from Instagram" flow (see that
+// section below) — same row shape as RAW_ROWS, kept separately so
+// js/data.js itself never needs to be touched from the browser (it can't
+// be — there's no server to write it back to). Merged into `posts` at
+// boot, right alongside the baked-in ones.
+const LS_IMPORTED_ROWS = 'saved-organizer:imported-rows';
+const LS_LAST_IMPORT_AT = 'saved-organizer:last-import-at';
 
 function loadStorage(){
   try{
@@ -1223,28 +1237,405 @@ function onTileDragEnd(){
 // sync itself — DATA_SYNCED_AT (js/sync-meta.js) is stamped by
 // tools/import_saved_posts.py every time you run it, including when
 // there's nothing new, so this reads as "last time you checked,"
-// not just "last time content actually changed."
+// not just "last time content actually changed." LS_LAST_IMPORT_AT is
+// the same idea for imports done right in the browser (see below) —
+// whichever happened more recently wins.
+const SYNC_ICON = '<svg class="syncstat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><polyline points="7.5 9.5 12 14 16.5 9.5"/><path d="M5 19h14"/></svg>';
 function updateSyncStatus(){
   const el = document.getElementById('syncStat');
   if(!el) return;
-  if(typeof DATA_SYNCED_AT === 'undefined'){
-    el.textContent = 'Never synced from Instagram';
-    return;
+  let latest = null;
+  if(typeof DATA_SYNCED_AT !== 'undefined'){
+    const d = new Date(DATA_SYNCED_AT);
+    if(!isNaN(d)) latest = d;
   }
-  const then = new Date(DATA_SYNCED_AT);
-  if(isNaN(then)){ el.textContent = ''; return; }
-  const days = Math.floor((Date.now() - then) / 86400000);
+  try{
+    const li = localStorage.getItem(LS_LAST_IMPORT_AT);
+    if(li){
+      const d2 = new Date(li);
+      if(!isNaN(d2) && (!latest || d2 > latest)) latest = d2;
+    }
+  }catch(e){}
+  if(!latest){ el.innerHTML = `${SYNC_ICON}<span>Never synced from Instagram</span>`; return; }
+  const days = Math.floor((Date.now() - latest) / 86400000);
   let rel;
   if(days <= 0) rel = 'today';
   else if(days === 1) rel = 'yesterday';
   else if(days < 30) rel = `${days} days ago`;
   else if(days < 365){ const m = Math.floor(days / 30); rel = `${m} month${m > 1 ? 's' : ''} ago`; }
   else { const y = Math.floor(days / 365); rel = `${y} year${y > 1 ? 's' : ''} ago`; }
-  el.textContent = `Synced ${rel}`;
-  el.title = then.toLocaleString();
+  el.innerHTML = `${SYNC_ICON}<span>Synced ${rel}</span>`;
+  el.title = latest.toLocaleString();
+}
+document.getElementById('syncStat').addEventListener('click', openImportSheet);
+
+// ---------- Import from Instagram ----------
+// A browser-side port of tools/import_saved_posts.py, so new posts can be
+// added straight from the app — drop the export file(s) Instagram emails
+// you and this parses + categorizes them the same way that script does.
+// Still can't touch js/data.js itself (no server to write it back to from
+// a browser) — new posts live in localStorage instead (LS_IMPORTED_ROWS,
+// same row shape as RAW_ROWS) and get merged into `posts` at boot,
+// alongside the baked-in ones. Safe to run against the same export more
+// than once: matched and skipped by Instagram shortcode, same as the
+// Python script.
+let importedRows = [];
+function loadImportedPosts(){
+  try{
+    const raw = localStorage.getItem(LS_IMPORTED_ROWS);
+    if(raw) importedRows = JSON.parse(raw);
+  }catch(e){ importedRows = []; }
+  for(const r of importedRows){
+    const p = rowToPost(r);
+    posts.push(p);
+    postsById.set(p.id, p);
+  }
+}
+
+// ---- HTML export parsing (mirrors tools/import_saved_posts.py exactly —
+// see that file's comments for why regexes over a full DOM parse: these
+// exports run 30-100MB+, and a full parse of that in-browser would be far
+// slower than a handful of targeted regex passes). ----
+const IMPORT_URL_RE = /<td colspan="2" class="_a6_q">URL<div><a target="_blank" href="https:\/\/www\.instagram\.com\/(p|reel)\/([A-Za-z0-9_-]+)\/?">/g;
+const IMPORT_CAPTION_RE = /<td class="_a6_q">Caption<\/td><td class="_2piu _a6_r">([\s\S]*?)<\/td>/;
+const IMPORT_HASHTAG_BLOCK_RE = /<h2[^>]*>Hashtags<\/h2>([\s\S]*?)(?=<h2|$)/;
+const IMPORT_NAME_DIV_RE = /<div class="_a6-p">([^<]*)<\/div>/g;
+const IMPORT_OWNER_USERNAME_RE = /<h2[^>]*>Owner<\/h2>[\s\S]*?<td class="_a6_q">Username<\/td><td class="_2piu _a6_r">([^<]*)<\/td>/;
+const IMPORT_DATE_RE = /<div class="_3-94 _a6-o">([^<]*)<\/div>/;
+const IMPORT_COLLECTION_NAME_RE = /<td class="_a6_q">Name<\/td><td class="_2piu _a6_r">([^<]*)<\/td><\/tr><tr><td class="_a6_q">Type<\/td>/g;
+const IMPORT_TAG_RE = /<[^>]+>/g;
+
+// Decoding HTML entities (&#064; etc.) without a full parse — a detached
+// <textarea> handles every named/numeric entity a real browser knows,
+// same as the page's own HTML would. Never inserted into the DOM as
+// markup elsewhere, so this can't execute anything even if an export
+// somehow contained a caption that looked like a tag.
+const _importEntityEl = document.createElement('textarea');
+function importDecodeEntities(s){ _importEntityEl.innerHTML = s; return _importEntityEl.value; }
+function importCleanText(s){ return importDecodeEntities(s.replace(IMPORT_TAG_RE, '')).trim(); }
+
+function importSplitEntries(text){
+  IMPORT_URL_RE.lastIndex = 0;
+  const matches = [];
+  let m;
+  while((m = IMPORT_URL_RE.exec(text))) matches.push(m);
+  const entries = [];
+  for(let i = 0; i < matches.length; i++){
+    const start = matches[i].index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    entries.push({ type: matches[i][1], shortcode: matches[i][2], chunk: text.slice(start, end) });
+  }
+  return entries;
+}
+
+function parsePostsHtml(text){
+  const found = {};
+  for(const { type, shortcode, chunk } of importSplitEntries(text)){
+    if(found[shortcode]) continue;
+    const capM = chunk.match(IMPORT_CAPTION_RE);
+    const caption = capM ? importCleanText(capM[1]) : '';
+    const hbM = chunk.match(IMPORT_HASHTAG_BLOCK_RE);
+    let hashtags = [];
+    if(hbM){
+      IMPORT_NAME_DIV_RE.lastIndex = 0;
+      let hm;
+      while((hm = IMPORT_NAME_DIV_RE.exec(hbM[1]))) hashtags.push(importCleanText(hm[1]));
+    }
+    const ownerM = chunk.match(IMPORT_OWNER_USERNAME_RE);
+    const owner = ownerM ? importCleanText(ownerM[1]) : '';
+    const dateM = chunk.match(IMPORT_DATE_RE);
+    const date = dateM ? importCleanText(dateM[1]) : '';
+    found[shortcode] = { type, caption, hashtags, owner, date };
+  }
+  return found;
+}
+
+function parseCollectionsHtml(text){
+  IMPORT_COLLECTION_NAME_RE.lastIndex = 0;
+  const matches = [];
+  let m;
+  while((m = IMPORT_COLLECTION_NAME_RE.exec(text))) matches.push(m);
+  const shortcodeToCollections = {};
+  for(let i = 0; i < matches.length; i++){
+    const name = importCleanText(matches[i][1]);
+    const start = matches[i].index + matches[i][0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const chunk = text.slice(start, end);
+    for(const { shortcode } of importSplitEntries(chunk)){
+      const arr = shortcodeToCollections[shortcode] || (shortcodeToCollections[shortcode] = []);
+      if(!arr.includes(name)) arr.push(name);
+    }
+  }
+  return shortcodeToCollections;
+}
+
+// ---- JSON export parsing (best-effort) ----
+// Instagram's JSON "saved" export is much sparser than the HTML one — no
+// caption or hashtags, just the owner's username, the post link, and a
+// timestamp — so posts imported from JSON lean on the collections-based
+// guess or fall into "Uncategorized" far more often. HTML stays the
+// recommended format (see the import sheet's own copy); this exists for
+// people who already have a JSON export and don't want to re-request one.
+// The exact key names below match Instagram's export as of when this was
+// written — Instagram has changed this shape before, so a few plausible
+// alternate keys are tried too, and an empty result surfaces a clear
+// "try HTML instead" message rather than silently importing nothing.
+function importShortcodeFromHref(href){
+  const m = /instagram\.com\/(p|reel)\/([A-Za-z0-9_-]+)/.exec(href || '');
+  return m ? { type: m[1], shortcode: m[2] } : null;
+}
+function parsePostsJson(obj){
+  const arr = obj.saved_saved_media || obj.saved_media || obj.saved_posts || (Array.isArray(obj) ? obj : []) || [];
+  const found = {};
+  for(const entry of arr){
+    const owner = entry.title || '';
+    const list = entry.string_list_data || entry.media_list_data || [];
+    for(const item of list){
+      const hit = importShortcodeFromHref(item.href);
+      if(!hit || found[hit.shortcode]) continue;
+      const date = item.timestamp ? new Date(item.timestamp * 1000).toUTCString() : '';
+      found[hit.shortcode] = { type: hit.type, caption: '', hashtags: [], owner, date };
+    }
+  }
+  return found;
+}
+function parseCollectionsJson(obj){
+  const arr = obj.collections_saved_collections || obj.collections || (Array.isArray(obj) ? obj : []) || [];
+  const shortcodeToCollections = {};
+  for(const coll of arr){
+    const name = (coll.string_map_data && coll.string_map_data.Name && coll.string_map_data.Name.value) || coll.name || '';
+    if(!name) continue;
+    const items = coll.string_list_data || coll.media_list_data || coll.saved_media || [];
+    for(const item of items){
+      const hit = importShortcodeFromHref(item.href);
+      if(!hit) continue;
+      const arr2 = shortcodeToCollections[hit.shortcode] || (shortcodeToCollections[hit.shortcode] = []);
+      if(!arr2.includes(name)) arr2.push(name);
+    }
+  }
+  return shortcodeToCollections;
+}
+function importLooksLikeJson(text){
+  const t = text.trimStart();
+  return t.startsWith('{') || t.startsWith('[');
+}
+
+// ---- Category heuristic (mirrors tools/import_saved_posts.py) ----
+// See that script's own comments for the full rationale — this is a
+// plain keyword/hashtag match, not the careful AI-assisted pass the
+// original library got, so expect it to be rougher.
+const IMPORT_CATEGORY_KEYWORDS = {
+  "Fashion & Style": ["fashion", "style", "outfit", "ootd", "ootn", "dress", "clothing", "clothes", "wear", "streetwear", "styling", "wardrobe", "outfitideas"],
+  "Art & Design": ["art", "design", "illustration", "artist", "drawing", "painting", "sketch", "graphicdesign", "artwork", "digitalart", "illustrator"],
+  "Weddings": ["wedding", "bride", "groom", "bridal", "weddingday", "weddingphotography", "engagement", "shaadi", "mehendi", "haldi"],
+  "Love": ["love", "couple", "couples", "relationship", "boyfriend", "girlfriend", "romance", "romantic", "valentine"],
+  "Travel": ["travel", "wanderlust", "vacation", "explore", "trip", "traveling", "travelgram", "tourism", "destination", "backpacking"],
+  "Home & Decor": ["homedecor", "interior", "decor", "interiordesign", "homedesign", "furniture", "apartment", "livingroom", "houseideas"],
+  "Beauty & Skincare": ["beauty", "skincare", "makeup", "skin", "cosmetics", "glowup", "selfcare", "skincareroutine", "skincaretips"],
+  "Pets & Animals": ["pets", "dog", "cat", "puppy", "kitten", "animal", "dogsofinstagram", "catsofinstagram", "doglover", "petsofinstagram"],
+  "Quotes & Motivation": ["quotes", "motivation", "inspiration", "mindset", "selflove", "affirmation", "quoteoftheday", "motivational"],
+  "Food & Recipes": ["food", "recipe", "cooking", "foodie", "recipes", "baking", "yummy", "foodphotography", "kitchen", "delicious"],
+  "Comedy & Memes": ["meme", "funny", "comedy", "lol", "humor", "relatable", "joke", "memes", "comedyvideo"],
+  "Books & Reading": ["books", "reading", "bookstagram", "book", "booklover", "bookrecommendations", "novel", "bookworm"],
+  "Movies & TV": ["movie", "tvshow", "film", "series", "netflix", "cinema", "movies", "tvseries", "actor", "actress"],
+  "DIY & Crafts": ["diy", "crafts", "handmade", "craft", "howto", "tutorial", "upcycle", "diyproject"],
+  "Nature & Plants": ["nature", "plants", "garden", "plant", "gardening", "outdoors", "hiking", "flowers", "plantsofinstagram"],
+  "Music": ["music", "song", "musician", "concert", "playlist", "singer", "musicvideo", "musiclover"],
+  "Fitness & Health": ["fitness", "workout", "health", "gym", "exercise", "wellness", "yoga", "fitnessmotivation"],
+  "Business & Finance": ["business", "finance", "money", "entrepreneur", "investing", "marketing", "startup", "entrepreneurship"],
+  "Tech & AI": ["tech", " ai ", "#ai", "technology", "artificialintelligence", "coding", "software", "gadget", "machinelearning"],
+};
+// Trusts a post's own Instagram collection name over any keyword guess,
+// when exactly one category is implied — customize this (or the keyword
+// list above) to fit whoever's saved posts these are; it only affects
+// the rough auto-guess for newly imported posts, never anything already
+// sorted in the app.
+const IMPORT_COLLECTION_TO_CATEGORY = {
+  "travel - india": "Travel", "italy": "Travel", "germany": "Travel",
+  "uk": "Travel", "new york": "Travel", "spain": "Travel", "japan": "Travel",
+  "marrakech": "Travel", "san francisco": "Travel", "paris": "Travel",
+  "holiday - abroad": "Travel",
+  "indie clothes": "Fashion & Style", "saree": "Fashion & Style",
+  "clothes": "Fashion & Style", "suits": "Fashion & Style",
+  "blouse and lehenga": "Fashion & Style", "fabrics": "Fashion & Style",
+  "drape": "Fashion & Style", "jamdani": "Fashion & Style",
+  "textiles and embroidery": "Fashion & Style", "jewelery": "Fashion & Style",
+  "ring": "Fashion & Style", "him ring": "Fashion & Style",
+  "wedding collection": "Weddings", "wedding decor": "Weddings",
+  "wedding photography": "Weddings", "wedding saree": "Weddings",
+  "wedding - haldi": "Weddings", "wedding stationery": "Weddings",
+  "wedding gifts": "Weddings", "wedding him": "Weddings", "mandaps": "Weddings",
+  "love": "Love", "quotes": "Quotes & Motivation", "cat": "Pets & Animals",
+  "book": "Books & Reading", "music": "Music", "movie": "Movies & TV",
+  "ai": "Tech & AI", "excercise": "Fitness & Health",
+  "cakes": "Food & Recipes", "food": "Food & Recipes", "recipes": "Food & Recipes",
+  "auburn hair": "Beauty & Skincare", "hair": "Beauty & Skincare",
+  "hair colour - red": "Beauty & Skincare", "makeup": "Beauty & Skincare",
+  "art": "Art & Design", "illustrations": "Art & Design",
+  "typography": "Art & Design", "couple illustration": "Art & Design",
+  "tattoo": "Art & Design",
+};
+function importCategoryFromCollections(collections){
+  const implied = new Set();
+  for(const c of collections){
+    const key = (c || '').trim().toLowerCase();
+    if(key in IMPORT_COLLECTION_TO_CATEGORY) implied.add(IMPORT_COLLECTION_TO_CATEGORY[key]);
+  }
+  return implied.size === 1 ? [...implied][0] : null;
+}
+function importGuessCategory(caption, hashtags, collections){
+  const fromCollections = importCategoryFromCollections(collections || []);
+  if(fromCollections) return fromCollections;
+  const text = ' ' + (caption || '').toLowerCase() + ' ' + (hashtags || []).map(h => h.toLowerCase()).join(' ') + ' ';
+  let bestCat = null, bestScore = 0;
+  for(const cat in IMPORT_CATEGORY_KEYWORDS){
+    let score = 0;
+    for(const kw of IMPORT_CATEGORY_KEYWORDS[cat]) if(text.includes(kw)) score++;
+    if(score > bestScore){ bestCat = cat; bestScore = score; }
+  }
+  return bestCat || 'Uncategorized';
+}
+
+function buildNewImportRows(parsedPosts, collectionsMap){
+  const existingShortcodes = new Set(posts.map(p => p.shortcode));
+  const rows = [];
+  const tally = {};
+  let skipped = 0;
+  for(const shortcode in parsedPosts){
+    if(existingShortcodes.has(shortcode)){ skipped++; continue; }
+    const p = parsedPosts[shortcode];
+    const collections = collectionsMap[shortcode] || [];
+    const category = importGuessCategory(p.caption, p.hashtags, collections);
+    tally[category] = (tally[category] || 0) + 1;
+    rows.push([shortcode, shortcode, p.type, p.caption, p.owner, p.date, p.hashtags.join('|'), category, collections.join('|')]);
+  }
+  return { rows, tally, skipped };
+}
+
+// ---- Import sheet UI ----
+function openImportSheet(){
+  document.getElementById('importStatus').hidden = true;
+  document.getElementById('importResult').hidden = true;
+  document.getElementById('importBackdrop').classList.add('open');
+}
+function closeImportSheet(){
+  document.getElementById('importBackdrop').classList.remove('open');
+}
+document.getElementById('importClose').addEventListener('click', closeImportSheet);
+document.getElementById('importBackdrop').addEventListener('click', (e) => {
+  if(e.target.id === 'importBackdrop') closeImportSheet();
+});
+document.getElementById('importBrowseBtn').addEventListener('click', () => {
+  document.getElementById('importFileInput').click();
+});
+document.getElementById('importFileInput').addEventListener('change', (e) => {
+  handleImportFiles(e.target.files);
+});
+(function setupImportDropzone(){
+  const zone = document.getElementById('importDrop');
+  ['dragenter', 'dragover'].forEach(evt => zone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    zone.classList.add('dragover');
+  }));
+  ['dragleave', 'drop'].forEach(evt => zone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+  }));
+  zone.addEventListener('drop', (e) => {
+    if(e.dataTransfer && e.dataTransfer.files) handleImportFiles(e.dataTransfer.files);
+  });
+})();
+
+function renderImportSummary(added, skipped, tally, wasHtml){
+  if(added === 0){
+    return `<p>No new posts — everything in this export is already in your archive${skipped ? ` (${skipped.toLocaleString()} matched)` : ''}.</p>`;
+  }
+  const rows = Object.entries(tally).sort((a, b) => b[1] - a[1])
+    .map(([cat, n]) => `<div class="import-tally-row"><span>${escapeHtml(cat)}</span><span>${n.toLocaleString()}</span></div>`).join('');
+  const jsonNote = wasHtml ? '' : `<p class="import-note">This was a JSON export, so these new posts have less to go on (no captions or hashtags) — expect more of them in "Uncategorized" than usual.</p>`;
+  return `
+    <p><b>${added.toLocaleString()}</b> new post${added === 1 ? '' : 's'} added${skipped ? ` (${skipped.toLocaleString()} were already in your archive)` : ''}.</p>
+    <div class="import-tally">${rows}</div>
+    ${jsonNote}
+    <p class="import-note">New posts land in a rough guessed category — sort any "Uncategorized" ones with <b>Select multiple</b> on that category's post list.</p>
+  `;
+}
+
+async function handleImportFiles(fileList){
+  const files = Array.from(fileList || []).filter(f => f.size > 0);
+  document.getElementById('importFileInput').value = '';
+  if(files.length === 0) return;
+
+  const statusEl = document.getElementById('importStatus');
+  const resultEl = document.getElementById('importResult');
+  resultEl.hidden = true;
+  statusEl.hidden = false;
+
+  if(files.some(f => /\.zip$/i.test(f.name))){
+    statusEl.textContent = "That's a zip file — unzip it first, then drop saved_posts.html (or .json) here.";
+    return;
+  }
+  const collectionsFiles = files.filter(f => /collection/i.test(f.name));
+  const postsFiles = files.filter(f => !/collection/i.test(f.name));
+  if(postsFiles.length === 0){
+    statusEl.textContent = "Couldn't find a saved posts file — drop saved_posts.html (or .json), not just the collections file.";
+    return;
+  }
+  if(postsFiles.length > 1){
+    statusEl.textContent = 'Drop one saved posts file at a time (plus, optionally, one collections file).';
+    return;
+  }
+
+  try{
+    statusEl.textContent = 'Parsing your export…';
+    // Yield once so "Parsing…" actually paints before the (possibly
+    // heavy, for a large export) synchronous regex work below.
+    await new Promise(r => setTimeout(r, 30));
+
+    const postsFile = postsFiles[0];
+    const postsText = await postsFile.text();
+    const postsIsJson = /\.json$/i.test(postsFile.name) || importLooksLikeJson(postsText);
+    const parsedPosts = postsIsJson ? parsePostsJson(JSON.parse(postsText)) : parsePostsHtml(postsText);
+
+    let collectionsMap = {};
+    if(collectionsFiles.length){
+      const collectionsFile = collectionsFiles[0];
+      const collectionsText = await collectionsFile.text();
+      const collectionsIsJson = /\.json$/i.test(collectionsFile.name) || importLooksLikeJson(collectionsText);
+      collectionsMap = collectionsIsJson ? parseCollectionsJson(JSON.parse(collectionsText)) : parseCollectionsHtml(collectionsText);
+    }
+
+    if(Object.keys(parsedPosts).length === 0){
+      statusEl.textContent = postsIsJson
+        ? "Couldn't find any saved posts in that JSON file — Instagram's export shape can vary. Try the HTML export instead (format: HTML) for more reliable results."
+        : "Couldn't find any saved posts in that file — make sure it's saved_posts.html from Instagram's export, unmodified.";
+      return;
+    }
+
+    const { rows, tally, skipped } = buildNewImportRows(parsedPosts, collectionsMap);
+    if(rows.length){
+      importedRows.push(...rows);
+      try{ localStorage.setItem(LS_IMPORTED_ROWS, JSON.stringify(importedRows)); }catch(e){}
+      for(const r of rows){
+        const p = rowToPost(r);
+        posts.push(p);
+        postsById.set(p.id, p);
+      }
+    }
+    try{ localStorage.setItem(LS_LAST_IMPORT_AT, new Date().toISOString()); }catch(e){}
+
+    statusEl.hidden = true;
+    resultEl.hidden = false;
+    resultEl.innerHTML = renderImportSummary(rows.length, skipped, tally, !postsIsJson);
+    updateSyncStatus();
+    if(currentScreen === 'gallery') renderGallery();
+  }catch(err){
+    statusEl.textContent = 'Something went wrong reading that file: ' + (err && err.message ? err.message : String(err));
+  }
 }
 
 // ---------- Boot ----------
+loadImportedPosts();
 loadCategoryOrder();
 loadStorage();
 updateSyncStatus();

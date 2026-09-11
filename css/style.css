@@ -175,8 +175,15 @@
   .stat{font-size:var(--text-xs); color:var(--ink-soft); text-align:right;}
   .stat b{color:var(--ink-soft); font-weight:600;}
   /* Nudges you to re-export/re-import periodically — see
-     tools/import_saved_posts.py, which stamps this on every run. */
-  .syncstat{font-size:var(--text-2xs); color:var(--ink-soft); text-align:right;}
+     tools/import_saved_posts.py, which stamps this on every run. Also the
+     entry point into the in-app import flow (see "Import from Instagram"
+     further down) — it's a <button>, not a plain label, hence the reset. */
+  .syncstat{
+    font-size:var(--text-2xs); color:var(--ink-soft); text-align:right;
+    display:inline-flex; align-items:center; gap:3px; justify-content:flex-end;
+    background:none; border:none; padding:0; margin:0; font-family:inherit; cursor:pointer;
+  }
+  .syncstat-icon{width:10px; height:10px; flex-shrink:0; opacity:.75;}
 
   /* The gallery screen's own header — shorter than the subgallery/detail
      ones (which need room for a back button, search, etc.), so it's
@@ -707,6 +714,37 @@
     background:none; border:none; padding:0; color:var(--accent-ink); font-size:var(--text-xs-plus); cursor:pointer;
   }
   .vault-forgot[hidden]{display:none;}
+
+  /* ---------- Import from Instagram sheet ---------- */
+  .import-intro{font-size:var(--text-sm); color:var(--ink-soft); margin:0 0 var(--space-12);}
+  .import-openlink{
+    display:inline-flex; align-items:center; gap:var(--space-6);
+    font-size:var(--text-sm); font-weight:600; color:var(--accent-ink);
+    text-decoration:none; margin-bottom:var(--space-14);
+  }
+  .import-openlink svg{width:14px; height:14px; flex-shrink:0;}
+  .import-steps{
+    margin:0 0 var(--space-16); padding-left:1.15em; font-size:var(--text-xs-plus);
+    color:var(--ink-soft); display:flex; flex-direction:column; gap:var(--space-5);
+  }
+  .import-steps code{font-size:0.92em; background:var(--accent-soft); padding:1px 4px; border-radius:3px;}
+  .import-drop{
+    border:1.5px dashed var(--line); border-radius:var(--radius-lg); padding:var(--space-18) var(--space-14);
+    text-align:center; cursor:pointer; transition:border-color .15s, background-color .15s;
+  }
+  .import-drop.dragover{border-color:var(--accent); background:var(--accent-soft);}
+  .import-drop-icon{width:26px; height:26px; margin:0 auto var(--space-8); color:var(--ink-faint); display:block;}
+  .import-drop-text{font-size:var(--text-sm); color:var(--ink-soft);}
+  .import-browse{background:none; border:none; padding:0; color:var(--accent-ink); font-weight:600; font-size:inherit; font-family:inherit; cursor:pointer; text-decoration:underline;}
+  .import-status{margin-top:var(--space-14); font-size:var(--text-sm); color:var(--ink-soft); text-align:center;}
+  .import-result{margin-top:var(--space-14); font-size:var(--text-sm); color:var(--ink);}
+  .import-tally{margin:var(--space-10) 0; border-top:1px solid var(--line);}
+  .import-tally-row{
+    display:flex; justify-content:space-between; gap:var(--space-8);
+    padding:var(--space-6) 0; border-bottom:1px solid var(--line); font-size:var(--text-xs-plus);
+  }
+  .import-tally-row span:last-child{color:var(--ink-faint);}
+  .import-note{font-size:var(--text-xs-plus); color:var(--ink-faint); margin:var(--space-8) 0 0;}
 
   .triagebar{
     position:fixed; left:0; right:0; bottom:0; z-index:40;
